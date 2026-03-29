@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Industrial Safety Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  /* ── FONTS ──────────────────────────────────────────────── */
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+  /* ── VARIABLES ──────────────────────────────────────────── */
+  :root{
+    --bg0:#080c10; --bg1:#0e1318; --bg2:#141c24; --bg3:#1c2630;
+    --border:#1e3040; --border-lit:#2a4a66;
+    --text:#c8dae8; --text-dim:#5a7a94; --text-bright:#e8f4ff;
+    --green:#00e676; --yellow:#ffca28; --red:#ff1744; --blue:#29b6f6;
+    --cyan:#00e5ff; --orange:#ff6d00;
+    --glow-green:0 0 12px #00e67660; --glow-red:0 0 16px #ff174470;
+    --glow-blue:0 0 12px #29b6f660; --glow-cyan:0 0 12px #00e5ff50;
+    --font-mono:'Share Tech Mono',monospace;
+    --font-ui:'Rajdhani',sans-serif;
+    --transition:.18s ease;
+    --radius:6px;
+  }
+
+  /* ── RESET ──────────────────────────────────────────────── */
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg0);color:var(--text);font-family:var(--font-ui);font-size:15px;overflow-x:hidden}
+  ::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-track{background:var(--bg1)} ::-webkit-scrollbar-thumb{background:var(--border-lit);border-radius:3px}
+
+  /* ── LAYOUT ─────────────────────────────────────────────── */
+  #app{display:grid;grid-template-rows:56px 1fr;height:100vh}
+
+  /* ── HEADER ─────────────────────────────────────────────── */
+  header{
+    background:var(--bg1);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;padding:0 20px;gap:16px;
+    position:relative;z-index:100;
+  }
+  .logo{font-family:var(--font-mono);font-size:14px;color:var(--cyan);letter-spacing:.15em;text-transform:uppercase;white-space:nowrap}
+  .logo span{color:var(--text-dim)}
+  .header-spacer{flex:1}
+  .conn-dot{width:9px;height:9px;border-radius:50%;background:var(--text-dim);flex-shrink:0;transition:var(--transition)}
+  .conn-dot.connected{background:var(--green);box-shadow:var(--glow-green);animation:pulse 2s infinite}
+  .conn-dot.error{background:var(--red);box-shadow:var(--glow-red)}
+  #conn-label{font-size:12px;color:var(--text-dim);font-family:var(--font-mono)}
+  .header-time{font-family:var(--font-mono);font-size:13px;color:var(--text-dim)}
+  
+  /* ── MAIN BODY ──────────────────────────────────────────── */
+  main{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+
+  /* ── ALERT BANNER ───────────────────────────────────────── */
+  #alert-banner{
+    display:none;background:linear-gradient(90deg,#1a0a00,#2a0d00);
+    border:1px solid var(--red);border-radius:var(--radius);
+    padding:10px 16px;display:flex;align-items:center;gap:12px;
+    animation:blink-border 1s infinite;
+  }
+  #alert-banner.hidden{display:none!important}
+  .alert-icon{font-size:20px;flex-shrink:0}
+  #alert-text{font-family:var(--font-mono);font-size:13px;color:#ff6b6b;flex:1;line-height:1.5}
+  #alert-close{background:none;border:1px solid #ff174460;color:var(--red);padding:3px 10px;border-radius:var(--radius);cursor:pointer;font-size:11px;font-family:var(--font-ui);transition:var(--transition)}
+  #alert-close:hover{background:#ff17441a}
+
+  /* ── SENSOR GRID ────────────────────────────────────────── */
+  .sensor-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+
+  .sensor-card{
+    background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px;position:relative;overflow:hidden;transition:var(--transition);
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .sensor-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent,var(--border));opacity:.7}
+  .sensor-card.alarm{border-color:var(--red)!important;box-shadow:var(--glow-red)}
+  .sensor-card.alarm::before{background:var(--red);opacity:1;animation:scanline 1.5s linear infinite}
+
+  .card-label{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim)}
+  .card-value{font-family:var(--font-mono);font-size:2rem;color:var(--text-bright);line-height:1;transition:color var(--transition)}
+  .card-unit{font-size:12px;color:var(--text-dim);margin-top:2px}
+  .card-status{font-size:11px;font-family:var(--font-mono);margin-top:4px}
+  .card-status.ok{color:var(--green)} .card-status.warn{color:var(--red)}
+
+  /* status badge cards */
+  .badge-card{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;gap:8px;min-height:100px;
+  }
+  .badge-icon{font-size:2rem;transition:var(--transition)}
+  .badge-state{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+  .badge-state.ok{color:var(--green)} .badge-state.active{color:var(--red)}
+
+  /* actuator status */
+  .actuator-row{display:flex;align-items:center;gap:8px}
+  .act-dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);flex-shrink:0;transition:var(--transition)}
+  .act-dot.on-green{background:var(--green);box-shadow:var(--glow-green);animation:pulse 1.5s infinite}
+  .act-dot.on-red{background:var(--red);box-shadow:var(--glow-red);animation:pulse 1s infinite}
+  .act-dot.on-blue{background:var(--blue);box-shadow:var(--glow-blue);animation:pulse 2s infinite}
+  .act-label{font-size:12px;color:var(--text-dim)}
+  .act-state{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-dim)}
+  .act-state.active{color:var(--text-bright)}
+
+  /* ── CHARTS ─────────────────────────────────────────────── */
+  .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:800px){.charts-grid{grid-template-columns:1fr}}
+  .chart-card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+  .chart-title{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);margin-bottom:12px}
+  .chart-wrap{position:relative;height:180px}
+
+  /* ── THRESHOLDS PANEL ───────────────────────────────────── */
+  .thresholds-panel{
+    background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:18px;
+  }
+  .panel-title{font-size:12px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--cyan);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .panel-title::after{content:'';flex:1;height:1px;background:var(--border)}
+  .thresh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+  .thresh-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+  .thresh-label{font-size:11px;color:var(--text-dim);margin-bottom:6px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+  .thresh-row{display:flex;align-items:center;gap:8px}
+  .thresh-input{
+    flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text-bright);
+    font-family:var(--font-mono);font-size:14px;padding:6px 10px;border-radius:var(--radius);
+    outline:none;transition:var(--transition);
+  }
+  .thresh-input:focus{border-color:var(--cyan);box-shadow:0 0 0 2px #00e5ff14}
+  .thresh-unit{font-size:12px;color:var(--text-dim);white-space:nowrap;font-family:var(--font-mono)}
+  .thresh-apply{
+    background:transparent;border:1px solid var(--cyan);color:var(--cyan);
+    border-radius:var(--radius);font-family:var(--font-ui);font-weight:700;font-size:12px;
+    cursor:pointer;transition:var(--transition);white-space:nowrap;
+  }
+  .thresh-apply:hover{background:var(--cyan);color:#000}
+  .thresh-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .toggle-sw{width:36px;height:18px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;position:relative;transition:var(--transition);flex-shrink:0}
+  .toggle-sw::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--text-dim);transition:var(--transition)}
+  .toggle-sw.on{background:#00e67620;border-color:var(--green)} .toggle-sw.on::after{left:calc(100% - 14px);background:var(--green)}
+  .toggle-label{font-size:12px;color:var(--text-dim)}
+
+  /* ── LOG TABLE ──────────────────────────────────────────── */
+  .log-panel{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .log-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .log-wrap{max-height:220px;overflow-y:auto}
+  table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px}
+  thead th{background:var(--bg2);padding:8px 12px;text-align:left;color:var(--text-dim);font-weight:600;letter-spacing:.08em;border-bottom:1px solid var(--border);white-space:nowrap}
+  tbody tr{border-bottom:1px solid var(--border);transition:background var(--transition)}
+  tbody tr:hover{background:var(--bg2)}
+  tbody td{padding:7px 12px;color:var(--text)}
+  tbody td.alarm-cell{color:var(--red)}
+  #download-csv{padding:4px 12px;background:transparent;border:1px solid var(--border-lit);color:var(--text-dim);border-radius:var(--radius);font-family:var(--font-ui);font-size:11px;cursor:pointer;transition:var(--transition)}
+  #download-csv:hover{border-color:var(--green);color:var(--green)}
+
+  /* ── ANIMATIONS ─────────────────────────────────────────── */
+  @keyframes pulse{0%,100%{opacity:1} 50%{opacity:.4}}
+  @keyframes blink-border{0%,100%{border-color:var(--red)} 50%{border-color:#ff174440}}
+  @keyframes scanline{0%{opacity:.3} 50%{opacity:1} 100%{opacity:.3}}
+</style>
+</head>
+<body>
+<div id="app">
+
+<header>
+  <div class="logo">⬡ <span>IND/</span>SAFETY<span>-MON</span></div>
+  <div class="header-spacer"></div>
+  
+  <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-right: 10px;">esp32-safety</span>
+  
+  <div class="conn-dot" id="conn-dot"></div>
+  <span id="conn-label">DISCONNECTED</span>
+  <span class="header-time" id="header-time">--:--:--</span>
+</header>
+
+<main>
+
+  <div id="alert-banner" class="hidden">
+    <span class="alert-icon">⚠</span>
+    <span id="alert-text"></span>
+    <button id="alert-close" onclick="dismissAlert()">DISMISS</button>
+  </div>
+
+  <div class="sensor-grid">
+    <div class="sensor-card" id="card-temp" style="--accent:var(--orange)">
+      <div class="card-label">Temperature</div>
+      <div class="card-value" id="val-temp">--.-</div>
+      <div class="card-unit">°C</div>
+      <div class="card-status ok" id="status-temp">NOMINAL</div>
+    </div>
+    <div class="sensor-card" id="card-hum" style="--accent:var(--blue)">
+      <div class="card-label">Humidity</div>
+      <div class="card-value" id="val-hum">--.-</div>
+      <div class="card-unit">%RH</div>
+      <div class="card-status ok" id="status-hum">NOMINAL</div>
+    </div>
+    <div class="sensor-card" id="card-gas" style="--accent:var(--yellow)">
+      <div class="card-label">Air Quality / Gas</div>
+      <div class="card-value" id="val-gas">----</div>
+      <div class="card-unit">ADC (0–4095)</div>
+      <div class="card-status ok" id="status-gas">NOMINAL</div>
+    </div>
+    <div class="sensor-card badge-card" id="card-fire" style="--accent:var(--red)">
+      <div class="card-label">Fire / Flame</div>
+      <div class="badge-icon" id="icon-fire">🟢</div>
+      <div class="badge-state ok" id="status-fire">CLEAR</div>
+    </div>
+    <div class="sensor-card badge-card" id="card-vib" style="--accent:var(--cyan)">
+      <div class="card-label">Vibration</div>
+      <div class="badge-icon" id="icon-vib">🟢</div>
+      <div class="badge-state ok" id="status-vib">STABLE</div>
+    </div>
+    <div class="sensor-card" style="--accent:var(--green)">
+      <div class="card-label">Actuator Status</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+        <div class="actuator-row"><div class="act-dot" id="dot-fan"></div><span class="act-label">Cooling Fan</span><span class="act-state" id="state-fan">OFF</span></div>
+        <div class="actuator-row"><div class="act-dot" id="dot-buz"></div><span class="act-label">Buzzer</span><span class="act-state" id="state-buz">OFF</span></div>
+        <div class="actuator-row"><div class="act-dot" id="dot-led"></div><span class="act-label">Warning LED</span><span class="act-state" id="state-led">OFF</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">🌡 Temperature History (°C)</div>
+      <div class="chart-wrap"><canvas id="chart-temp"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">💧 Humidity History (%RH)</div>
+      <div class="chart-wrap"><canvas id="chart-hum"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">☁ Gas / Air Quality (ADC)</div>
+      <div class="chart-wrap"><canvas id="chart-gas"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">📊 Event Timeline</div>
+      <div class="chart-wrap"><canvas id="chart-events"></canvas></div>
+    </div>
+  </div>
+
+  <div class="thresholds-panel">
+    <div class="panel-title">⚙ Threshold Configuration</div>
+    <div class="thresh-grid">
+      <div class="thresh-item">
+        <div class="thresh-label">Temperature Threshold</div>
+        <div class="thresh-row">
+          <input class="thresh-input" id="t-temp" type="number" step="0.5" value="35"/>
+          <span class="thresh-unit">°C</span>
+          <button class="thresh-apply" onclick="applyThreshold('temp')">APPLY</button>
+        </div>
+      </div>
+      <div class="thresh-item">
+        <div class="thresh-label">Humidity Threshold</div>
+        <div class="thresh-row">
+          <input class="thresh-input" id="t-hum" type="number" step="1" value="80"/>
+          <span class="thresh-unit">%RH</span>
+          <button class="thresh-apply" onclick="applyThreshold('hum')">APPLY</button>
+        </div>
+      </div>
+      <div class="thresh-item">
+        <div class="thresh-label">Gas Threshold (ADC)</div>
+        <div class="thresh-row">
+          <input class="thresh-input" id="t-gas" type="number" step="10" value="400"/>
+          <span class="thresh-unit">raw</span>
+          <button class="thresh-apply" onclick="applyThreshold('gas')">APPLY</button>
+        </div>
+      </div>
+      <div class="thresh-item">
+        <div class="thresh-label">Fire Alert</div>
+        <label class="thresh-toggle" onclick="toggleAlert('fire')">
+          <div class="toggle-sw on" id="tog-fire"></div>
+          <span class="toggle-label" id="tog-fire-label">Enabled</span>
+        </label>
+      </div>
+      <div class="thresh-item">
+        <div class="thresh-label">Vibration Alert</div>
+        <label class="thresh-toggle" onclick="toggleAlert('vib')">
+          <div class="toggle-sw on" id="tog-vib"></div>
+          <span class="toggle-label" id="tog-vib-label">Enabled</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="log-panel">
+    <div class="log-header">
+      <div class="panel-title" style="margin:0;flex:1">📋 Event Log</div>
+      <button id="download-csv" onclick="downloadCSV()">⬇ Download CSV</button>
+    </div>
+    <div class="log-wrap">
+      <table>
+        <thead><tr>
+          <th>Timestamp</th><th>Temp (°C)</th><th>Hum (%)</th>
+          <th>Gas (ADC)</th><th>Fire</th><th>Vibration</th><th>Fan</th><th>Alarms</th>
+        </tr></thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════════════ */
+let ws = null;
+let connected = false;
+let alertDismissed = false;
+let logData = [];
+const MAX_LOG = 500;
+const CHART_POINTS = 60;
+
+let thresholds = { temp: 35, hum: 80, gas: 400 };
+let toggles    = { fire: true, vib: true };
+
+/* ═══════════════════════════════════════════════════════════
+   WEBSOCKET
+════════════════════════════════════════════════════════════ */
+function connect() {
+  if (ws) { ws.close(); ws = null; }
+  
+  // Connects to the ESP32's default Hotspot IP
+  const url = `ws://192.168.4.1/ws`; 
+  
+  setConnStatus('connecting');
+  ws = new WebSocket(url);
+  ws.onopen    = () => setConnStatus(true);
+  ws.onclose   = () => { setConnStatus(false); setTimeout(() => { if(!connected) connect(); }, 3000); };
+  ws.onerror   = () => setConnStatus('error');
+  ws.onmessage = e => handleMessage(JSON.parse(e.data));
+}
+
+// Auto-connect on page load
+window.addEventListener('load', connect);
+
+function setConnStatus(state) {
+  const dot = document.getElementById('conn-dot');
+  const lbl = document.getElementById('conn-label');
+  if (state === true)  { connected = true;  dot.className='conn-dot connected'; lbl.textContent='CONNECTED'; lbl.style.color='var(--green)'; }
+  else if (state === 'connecting') { connected=false; dot.className='conn-dot'; lbl.textContent='CONNECTING…'; lbl.style.color='var(--yellow)'; }
+  else if (state === 'error') { connected=false; dot.className='conn-dot error'; lbl.textContent='ERROR'; lbl.style.color='var(--red)'; }
+  else { connected=false; dot.className='conn-dot'; lbl.textContent='DISCONNECTED'; lbl.style.color='var(--text-dim)'; }
+}
+
+function sendWS(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MESSAGE HANDLER
+════════════════════════════════════════════════════════════ */
+function handleMessage(d) {
+  // Update threshold inputs if server echoes them, ONLY if user is not typing in them!
+  if (d.thresholds) {
+    thresholds.temp = d.thresholds.temp;
+    thresholds.hum  = d.thresholds.hum;
+    thresholds.gas  = d.thresholds.gas;
+    
+    if (document.activeElement.id !== 't-temp') document.getElementById('t-temp').value = thresholds.temp;
+    if (document.activeElement.id !== 't-hum')  document.getElementById('t-hum').value  = thresholds.hum;
+    if (document.activeElement.id !== 't-gas')  document.getElementById('t-gas').value  = thresholds.gas;
+    
+    updateChartLines();
+  }
+
+  // Sensor cards
+  setText('val-temp', d.temp.toFixed(1));
+  setText('val-hum',  d.hum.toFixed(1));
+  setText('val-gas',  d.gas);
+
+  setAlarmCard('card-temp',  'status-temp', d.alarms.temp, 'NOMINAL', 'ALARM');
+  setAlarmCard('card-hum',   'status-hum',  d.alarms.hum,  'NOMINAL', 'ALARM');
+  setAlarmCard('card-gas',   'status-gas',  d.alarms.gas,  'NOMINAL', 'ALARM');
+
+  // Fire
+  const fireOn = d.fire;
+  document.getElementById('icon-fire').textContent = fireOn ? '🔴' : '🟢';
+  setBadge('card-fire','status-fire', fireOn && d.alarms.fire, fireOn ? 'FLAME DETECTED' : 'CLEAR');
+
+  // Vibration
+  const vibOn = d.vib;
+  document.getElementById('icon-vib').textContent = vibOn ? '🔴' : '🟢';
+  setBadge('card-vib','status-vib', vibOn && d.alarms.vib, vibOn ? 'VIBRATION' : 'STABLE');
+
+  // Actuators
+  setActuator('dot-fan','state-fan', d.fan,    'on-green', 'RUNNING', 'OFF');
+  setActuator('dot-buz','state-buz', d.buzzer, 'on-red',   'ACTIVE',  'OFF');
+  setActuator('dot-led','state-led', d.fan || d.buzzer, 'on-red', 'ON', 'OFF');
+
+  // Alert banner
+  const activeAlarms = [];
+  if (d.alarms.temp) activeAlarms.push(`🌡 Temperature ${d.temp.toFixed(1)}°C > ${thresholds.temp}°C`);
+  if (d.alarms.hum)  activeAlarms.push(`💧 Humidity ${d.hum.toFixed(1)}% > ${thresholds.hum}%`);
+  if (d.alarms.gas)  activeAlarms.push(`☁ Gas level ${d.gas} > ${thresholds.gas}`);
+  if (d.alarms.fire) activeAlarms.push('🔥 FIRE DETECTED');
+  if (d.alarms.vib)  activeAlarms.push('📳 VIBRATION FAULT');
+  updateAlertBanner(activeAlarms);
+
+  // Charts
+  const now = new Date();
+  const ts = now.toLocaleTimeString();
+  pushChart(chartTemp, ts, d.temp);
+  pushChart(chartHum,  ts, d.hum);
+  pushChart(chartGas,  ts, d.gas);
+  pushEventChart(ts, d.alarms);
+
+  // Log
+  logData.push({
+    ts, temp: d.temp, hum: d.hum, gas: d.gas,
+    fire: d.fire, vib: d.vib, fan: d.fan,
+    alarms: activeAlarms.join('; ')
+  });
+  if (logData.length > MAX_LOG) logData.shift();
+  appendLogRow(logData[logData.length-1]);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   THRESHOLD / TOGGLE
+════════════════════════════════════════════════════════════ */
+function applyThreshold(key) {
+  const val = parseFloat(document.getElementById('t-'+key).value);
+  thresholds[key] = val;
+  sendWS({ setThreshold: { [key]: val } });
+  
+  // Blur (unfocus) the input box so it immediately starts accepting WebSocket updates again
+  document.getElementById('t-'+key).blur();
+  
+  updateChartLines();
+}
+
+function toggleAlert(key) {
+  toggles[key] = !toggles[key];
+  const sw  = document.getElementById('tog-'+key);
+  const lbl = document.getElementById('tog-'+key+'-label');
+  sw.classList.toggle('on', toggles[key]);
+  lbl.textContent = toggles[key] ? 'Enabled' : 'Disabled';
+  if (key === 'fire') sendWS({ fireAlertEnabled: toggles[key] });
+  if (key === 'vib')  sendWS({ vibAlertEnabled:  toggles[key] });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ALERT BANNER
+════════════════════════════════════════════════════════════ */
+function updateAlertBanner(alarms) {
+  const banner = document.getElementById('alert-banner');
+  if (alarms.length === 0) {
+    banner.classList.add('hidden');
+    alertDismissed = false;
+    return;
+  }
+  if (!alertDismissed) {
+    banner.classList.remove('hidden');
+    document.getElementById('alert-text').innerHTML = '⚡ ALARM: ' + alarms.join(' &nbsp;|&nbsp; ');
+  }
+}
+function dismissAlert() {
+  alertDismissed = true;
+  document.getElementById('alert-banner').classList.add('hidden');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DOM HELPERS
+════════════════════════════════════════════════════════════ */
+function setText(id, v) { document.getElementById(id).textContent = v; }
+
+function setAlarmCard(cardId, statusId, alarm, okTxt, alarmTxt) {
+  const card   = document.getElementById(cardId);
+  const status = document.getElementById(statusId);
+  card.classList.toggle('alarm', alarm);
+  status.textContent = alarm ? alarmTxt : okTxt;
+  status.className   = 'card-status ' + (alarm ? 'warn' : 'ok');
+}
+
+function setBadge(cardId, statusId, alarm, txt) {
+  const card   = document.getElementById(cardId);
+  const status = document.getElementById(statusId);
+  card.classList.toggle('alarm', alarm);
+  status.textContent = txt;
+  status.className   = 'badge-state ' + (alarm ? 'active' : 'ok');
+}
+
+function setActuator(dotId, stateId, on, dotClass, onTxt, offTxt) {
+  const dot   = document.getElementById(dotId);
+  const state = document.getElementById(stateId);
+  dot.className   = 'act-dot' + (on ? ' '+dotClass : '');
+  state.textContent = on ? onTxt : offTxt;
+  state.className = 'act-state' + (on ? ' active' : '');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOG TABLE
+════════════════════════════════════════════════════════════ */
+function appendLogRow(r) {
+  const tbody = document.getElementById('log-body');
+  const tr = document.createElement('tr');
+  const alarm = r.alarms.length > 0;
+  tr.innerHTML = `
+    <td>${r.ts}</td>
+    <td class="${r.temp > thresholds.temp ? 'alarm-cell' : ''}">${r.temp.toFixed(1)}</td>
+    <td class="${r.hum  > thresholds.hum  ? 'alarm-cell' : ''}">${r.hum.toFixed(1)}</td>
+    <td class="${r.gas  > thresholds.gas  ? 'alarm-cell' : ''}">${r.gas}</td>
+    <td class="${r.fire ? 'alarm-cell' : ''}">${r.fire ? 'YES' : 'NO'}</td>
+    <td class="${r.vib  ? 'alarm-cell' : ''}">${r.vib  ? 'YES' : 'NO'}</td>
+    <td>${r.fan ? 'ON' : 'OFF'}</td>
+    <td class="${alarm ? 'alarm-cell' : ''}">${r.alarms || '—'}</td>
+  `;
+  tbody.prepend(tr);
+  // Keep table from growing forever
+  while (tbody.rows.length > 100) tbody.deleteRow(tbody.rows.length - 1);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CSV DOWNLOAD
+════════════════════════════════════════════════════════════ */
+function downloadCSV() {
+  const header = 'Timestamp,Temp_C,Humidity_%,Gas_ADC,Fire,Vibration,Fan,Alarms\n';
+  const rows   = logData.map(r =>
+    `${r.ts},${r.temp.toFixed(1)},${r.hum.toFixed(1)},${r.gas},${r.fire},${r.vib},${r.fan},"${r.alarms}"`
+  ).join('\n');
+  const blob = new Blob([header+rows], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `safety_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.csv`;
+  a.click();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHARTS
+════════════════════════════════════════════════════════════ */
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: false,
+  animation: { duration: 200 },
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color:'#5a7a94', maxTicksLimit:8, font:{size:10} }, grid: { color:'#1e3040' } },
+    y: { ticks: { color:'#5a7a94', font:{size:10} }, grid: { color:'#1e3040' } }
+  }
+};
+
+function makeChart(id, color, min, max) {
+  const ctx = document.getElementById(id).getContext('2d');
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels:[], datasets:[{
+      data:[], borderColor:color, backgroundColor: color+'18',
+      borderWidth:1.5, pointRadius:0, fill:true, tension:.35
+    }]},
+    options: { ...chartDefaults,
+      scales: { ...chartDefaults.scales,
+        y: { ...chartDefaults.scales.y, min, max }
+      }
+    }
+  });
+}
+
+function makeEventChart(id) {
+  const ctx = document.getElementById(id).getContext('2d');
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [
+        { label:'Temp',  data:[], backgroundColor:'#ff6d0080' },
+        { label:'Hum',   data:[], backgroundColor:'#29b6f680' },
+        { label:'Gas',   data:[], backgroundColor:'#ffca2880' },
+        { label:'Fire',  data:[], backgroundColor:'#ff174480' },
+        { label:'Vib',   data:[], backgroundColor:'#00e5ff60' },
+      ]
+    },
+    options: { ...chartDefaults,
+      plugins: { legend: { display:true, labels:{ color:'#5a7a94', font:{size:10}, boxWidth:10 } } },
+      scales: { x: chartDefaults.scales.x, y: { ...chartDefaults.scales.y, min:0, max:1, display:false } }
+    }
+  });
+}
+
+const chartTemp   = makeChart('chart-temp',   '#ff6d00', 0,  60);
+const chartHum    = makeChart('chart-hum',    '#29b6f6', 0, 100);
+const chartGas    = makeChart('chart-gas',    '#ffca28', 0, 4095);
+const chartEvents = makeEventChart('chart-events');
+
+function pushChart(chart, label, value) {
+  chart.data.labels.push(label);
+  chart.data.datasets[0].data.push(value);
+  if (chart.data.labels.length > CHART_POINTS) {
+    chart.data.labels.shift();
+    chart.data.datasets[0].data.shift();
+  }
+  chart.update('none');
+}
+
+function pushEventChart(label, alarms) {
+  const d = chartEvents.data;
+  d.labels.push(label);
+  d.datasets[0].data.push(alarms.temp ? 1 : 0);
+  d.datasets[1].data.push(alarms.hum  ? 1 : 0);
+  d.datasets[2].data.push(alarms.gas  ? 1 : 0);
+  d.datasets[3].data.push(alarms.fire ? 1 : 0);
+  d.datasets[4].data.push(alarms.vib  ? 1 : 0);
+  if (d.labels.length > CHART_POINTS) {
+    d.labels.shift();
+    d.datasets.forEach(ds => ds.data.shift());
+  }
+  chartEvents.update('none');
+}
+
+function updateChartLines() {
+  // Threshold annotation lines via dataset (simple approach)
+  // Chart already shows separate threshold input fields
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CLOCK
+════════════════════════════════════════════════════════════ */
+function updateClock() {
+  document.getElementById('header-time').textContent =
+    new Date().toLocaleTimeString('en-GB',{hour12:false});
+}
+updateClock();
+setInterval(updateClock, 1000);
+</script>
+</body>
+</html>
