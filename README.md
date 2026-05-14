@@ -1,5 +1,5 @@
-# Smart Industrial Safety & Equipment Monitoring System
-### ESP32 + WiFi WebSocket Dashboard — Complete Project Guide
+## Smart Industrial Safety & Equipment Monitoring System
+## ESP32 + WiFi WebSocket Dashboard — Complete Project Guide
 
 ---
 
