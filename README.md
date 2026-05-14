@@ -19,6 +19,7 @@
 12. [Sensor Calibration Notes](#12-sensor-calibration-notes)
 13. [Troubleshooting](#13-troubleshooting)
 14. [Library Reference](#14-library-reference)
+15. [Project Images](#15-project-images)
 
 ---
 
@@ -478,5 +479,5 @@ Asynchronous HTTP and WebSocket server for ESP32. Handles multiple simultaneous 
 - **Google Fonts (Rajdhani, Share Tech Mono)** — Loaded from fonts.googleapis.com. Requires internet connection for styling (dashboard still functions without it).
 
 ---
-
+## 15. Project Images
 *Last updated: 2026. Designed for ESP32 Arduino framework via PlatformIO.*
