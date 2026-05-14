@@ -480,4 +480,7 @@ Asynchronous HTTP and WebSocket server for ESP32. Handles multiple simultaneous 
 
 ---
 ## 15. Project Images
+![](hardware-implentation.jpeg)
+![](industrial-monitor-frontend.jpeg)
+
 *Last updated: 2026. Designed for ESP32 Arduino framework via PlatformIO.*
